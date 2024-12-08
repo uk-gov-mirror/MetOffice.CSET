@@ -1,6 +1,7 @@
 name: cset-dev
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # Runtime dependencies
   - numpy
@@ -11,6 +12,7 @@ dependencies:
   - isodate
   - markdown-it-py >= 3.0
   - nc-time-axis
+  - iris-grib
 
   # Build dependencies
   - setuptools>=64

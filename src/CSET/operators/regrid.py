@@ -108,11 +108,11 @@ def regrid_onto_cube(
 
 def regrid_onto_xyspacing(
     toregrid: iris.cube.Cube | iris.cube.CubeList,
-    xspacing: int,
-    yspacing: int,
+    xspacing: float,
+    yspacing: float,
     method: str,
     **kwargs,
-) -> iris.cube.Cube:
+) -> iris.cube.Cube | iris.cube.CubeList:
     """Regrid cube or cubelist onto a set x,y spacing.
 
     Regrid cube(s) using specified x,y spacing, which is performed linearly.
@@ -123,9 +123,9 @@ def regrid_onto_xyspacing(
         An iris cube of the data to regrid, or multiple cubes to regrid in a
         cubelist. A minimum requirement is that the cube(s) need to be 2D with a
         latitude, longitude coordinates.
-    xspacing: integer
+    xspacing: float
         Spacing of points in longitude direction (could be degrees, meters etc.)
-    yspacing: integer
+    yspacing: float
         Spacing of points in latitude direction (could be degrees, meters etc.)
     method: str
         Method used to regrid onto, etc. Linear will use iris.analysis.Linear()
@@ -218,9 +218,11 @@ def regrid_to_single_point(
         An iris cube of the data to regrid. As a minimum, it needs to be 2D with
         latitude, longitude coordinates.
     lon_pt: float
-        Selected value of longitude.
+        Selected value of longitude: this should be in the range -180 degrees to
+        180 degrees.
     lat_pt: float
-        Selected value of latitude.
+        Selected value of latitude: this should be in the range -90 degrees to
+        90 degrees.
     method: str
         Method used to determine the values at the selected longitude and
         latitude. The recommended approach is to use iris.analysis.Nearest(),
@@ -290,14 +292,19 @@ def regrid_to_single_point(
     )
 
     # Check to see if selected point is outside the domain
-    if (
-        (lat_pt < lat_min)
-        or (lat_pt > lat_max)
-        or (lon_pt < lon_min)
-        or (lon_pt > lon_max)
-    ):
+    if (lat_pt < lat_min) or (lat_pt > lat_max):
         raise ValueError("Selected point is outside the domain.")
-    elif (
+    else:
+        if (lon_pt < lon_min) or (lon_pt > lon_max):
+            if (lon_pt + 360.0 >= lon_min) and (lon_pt + 360.0 <= lon_max):
+                lon_pt += 360.0
+            elif (lon_pt - 360.0 >= lon_min) and (lon_pt - 360.0 <= lon_max):
+                lon_pt -= 360.0
+            else:
+                raise ValueError("Selected point is outside the domain.")
+
+    # Check to see if selected point is near the domain boundaries
+    if (
         (lat_pt < lat_min_bound)
         or (lat_pt > lat_max_bound)
         or (lon_pt < lon_min_bound)
