@@ -889,7 +889,7 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
 
 
 def _compute_winds(
-    cubes: iris.cube.CubeList, constraint: iris.constraint | None = None
+    cubes: iris.cube.CubeList, constraint: iris.Constraint | None = None
 ):
     """To compute wind_speed from vector components if not available as diagnostic.
 
