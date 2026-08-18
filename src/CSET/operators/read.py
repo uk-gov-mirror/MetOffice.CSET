@@ -888,7 +888,9 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
-def _compute_winds(cubes: iris.cube.CubeList, constraint: iris.Constraint | None):
+def _compute_winds(
+    cubes: iris.cube.CubeList, constraint: iris.constraint | None = None
+):
     """To compute wind_speed from vector components if not available as diagnostic.
 
     Diagnostics of wind are also not always consistent between the UM
@@ -904,7 +906,7 @@ def _compute_winds(cubes: iris.cube.CubeList, constraint: iris.Constraint | None
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
 
-    if constraint:
+    if constraint and hasattr(constraint, "_cube_func"):
         varname_dict = dict(
             zip(
                 constraint._cube_func.__code__.co_freevars,
