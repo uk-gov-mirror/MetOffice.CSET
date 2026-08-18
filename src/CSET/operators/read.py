@@ -906,7 +906,7 @@ def _compute_winds(
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
 
-    if constraint and hasattr(constraint, "_cube_func"):
+    if (constraint != None) and (hasattr(constraint, "_cube_func")):
         varname_dict = dict(
             zip(
                 constraint._cube_func.__code__.co_freevars,
