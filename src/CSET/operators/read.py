@@ -166,7 +166,6 @@ def read_cubes(
     # Get iterable of paths. Each path corresponds to 1 model.
     paths = iter_maybe(file_paths)
     model_names = iter_maybe(model_names)
-
     # Check we have appropriate number of model names.
     if model_names != (None,) and len(model_names) != len(paths):
         raise ValueError(
@@ -185,7 +184,6 @@ def read_cubes(
     for cube in cubes:
         # Use 1 to indicate True, as booleans can't be saved in NetCDF attributes.
         cube.attributes["cset_comparison_base"] = 1
-
     # Load the rest of the models.
     cubes.extend(itertools.chain.from_iterable(model_cubes))
 
@@ -237,7 +235,7 @@ def _load_model(
     logger.debug("Constraint: %s", constraint)
     cubes = iris.load(input_files, constraint, callback=_loading_callback)
     # If required, compute wind_speed from components.
-    cubes = _compute_winds(cubes)
+    cubes = _compute_winds(cubes, constraint)
 
     # Add model_name attribute to each cube to make it available at any further
     # step without needing to pass it as function parameter.
@@ -890,7 +888,7 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
-def _compute_winds(cubes: iris.cube.CubeList):
+def _compute_winds(cubes: iris.cube.CubeList, constraint):
     """To compute wind_speed from vector components if not available as diagnostic.
 
     Diagnostics of wind are also not always consistent between the UM
@@ -905,6 +903,31 @@ def _compute_winds(cubes: iris.cube.CubeList):
     # the cell methods, but it may not be warranted.
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
+    varname_dict = dict(
+        zip(
+            constraint._cube_func.__code__.co_freevars,
+            (c.cell_contents for c in constraint._cube_func.__closure__),
+            strict=True,
+        )
+    )
+    requested_names = [n for n in varname_dict["varname"] if n.endswith("REQUESTED")]
+
+    filter_windspeed = []
+    if "WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.append("wind_speed_at_10m")
+    if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.append("eastward_wind_at_10m")
+    if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.append("northwardward_wind_at_10m")
+
+    filter_windspeed_constraint = iris.Constraint(
+        cube_func=lambda cube: (
+            cube.long_name in filter_windspeed
+            or cube.standard_name in filter_windspeed
+            or cube.var_name in filter_windspeed
+        )
+    )
+
     u_constr = iris.Constraint("eastward_wind_at_10m")
     v_constr = iris.Constraint("northward_wind_at_10m")
     speed_constr = iris.Constraint("wind_speed_at_10m")
@@ -924,6 +947,9 @@ def _compute_winds(cubes: iris.cube.CubeList):
                 cubes = cubes.extract(speed_constr)
     except (KeyError, AttributeError):
         pass
+
+    if not ("observed" in cubes[0].long_name):
+        cubes = cubes.extract(filter_windspeed_constraint)
 
     return cubes
 
