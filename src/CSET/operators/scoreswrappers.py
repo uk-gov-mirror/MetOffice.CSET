@@ -282,7 +282,6 @@ def scores_rmse(
                 other = cb
     else:
         base, other = _sort_cubes_for_verification(cubes)
-
     # Copy the coordinates of the input cubes.
     other_xr = xr.DataArray.from_iris(other)
     base_xr = xr.DataArray.from_iris(base)

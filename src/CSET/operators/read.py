@@ -903,6 +903,7 @@ def _compute_winds(cubes: iris.cube.CubeList, constraint):
     # the cell methods, but it may not be warranted.
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
+
     varname_dict = dict(
         zip(
             constraint._cube_func.__code__.co_freevars,
@@ -916,9 +917,9 @@ def _compute_winds(cubes: iris.cube.CubeList, constraint):
     if "WIND_SPEED_REQUESTED" in requested_names:
         filter_windspeed.append("wind_speed_at_10m")
     if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
-        filter_windspeed.append("eastward_wind_at_10m")
+        filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
     if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
-        filter_windspeed.append("northwardward_wind_at_10m")
+        filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
 
     filter_windspeed_constraint = iris.Constraint(
         cube_func=lambda cube: (
