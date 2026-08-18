@@ -888,7 +888,7 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
-def _compute_winds(cubes: iris.cube.CubeList, constraint):
+def _compute_winds(cubes: iris.cube.CubeList, constraint: iris.Constraint | None):
     """To compute wind_speed from vector components if not available as diagnostic.
 
     Diagnostics of wind are also not always consistent between the UM
@@ -904,53 +904,58 @@ def _compute_winds(cubes: iris.cube.CubeList, constraint):
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
 
-    varname_dict = dict(
-        zip(
-            constraint._cube_func.__code__.co_freevars,
-            (c.cell_contents for c in constraint._cube_func.__closure__),
-            strict=True,
+    if constraint:
+        varname_dict = dict(
+            zip(
+                constraint._cube_func.__code__.co_freevars,
+                (c.cell_contents for c in constraint._cube_func.__closure__),
+                strict=True,
+            )
         )
-    )
-    requested_names = [n for n in varname_dict["varname"] if n.endswith("REQUESTED")]
+        requested_names = [
+            n for n in varname_dict["varname"] if n.endswith("REQUESTED")
+        ]
 
-    filter_windspeed = []
-    if "WIND_SPEED_REQUESTED" in requested_names:
-        filter_windspeed.append("wind_speed_at_10m")
-    if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
-        filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
-    if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
-        filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
+        filter_windspeed = []
+        if "WIND_SPEED_REQUESTED" in requested_names:
+            filter_windspeed.append("wind_speed_at_10m")
+        if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
+            filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
+        if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
+            filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
 
-    filter_windspeed_constraint = iris.Constraint(
-        cube_func=lambda cube: (
-            cube.long_name in filter_windspeed
-            or cube.standard_name in filter_windspeed
-            or cube.var_name in filter_windspeed
+        filter_windspeed_constraint = iris.Constraint(
+            cube_func=lambda cube: (
+                cube.long_name in filter_windspeed
+                or cube.standard_name in filter_windspeed
+                or cube.var_name in filter_windspeed
+            )
         )
-    )
 
-    u_constr = iris.Constraint("eastward_wind_at_10m")
-    v_constr = iris.Constraint("northward_wind_at_10m")
-    speed_constr = iris.Constraint("wind_speed_at_10m")
-    try:
-        if cubes.extract(u_constr) and cubes.extract(v_constr):
-            if len(cubes) == 2:
-                wind_only = True
-            else:
-                wind_only = False
-            if len(cubes.extract(u_constr)) == 1 and not cubes.extract(speed_constr):
-                _add_wind_speed_um(cubes)
-            # Convert winds in the UM to be relative to true east and true north.
+        u_constr = iris.Constraint("eastward_wind_at_10m")
+        v_constr = iris.Constraint("northward_wind_at_10m")
+        speed_constr = iris.Constraint("wind_speed_at_10m")
+        try:
             if cubes.extract(u_constr) and cubes.extract(v_constr):
-                _convert_wind_true_dirn_um(cubes)
-            # Return only wind_speed cube
-            if wind_only:
-                cubes = cubes.extract(speed_constr)
-    except (KeyError, AttributeError):
-        pass
+                if len(cubes) == 2:
+                    wind_only = True
+                else:
+                    wind_only = False
+                if len(cubes.extract(u_constr)) == 1 and not cubes.extract(
+                    speed_constr
+                ):
+                    _add_wind_speed_um(cubes)
+                # Convert winds in the UM to be relative to true east and true north.
+                if cubes.extract(u_constr) and cubes.extract(v_constr):
+                    _convert_wind_true_dirn_um(cubes)
+                # Return only wind_speed cube
+                if wind_only:
+                    cubes = cubes.extract(speed_constr)
+        except (KeyError, AttributeError):
+            pass
 
-    if not ("observed" in cubes[0].long_name):
-        cubes = cubes.extract(filter_windspeed_constraint)
+        if not ("observed" in cubes[0].long_name):
+            cubes = cubes.extract(filter_windspeed_constraint)
 
     return cubes
 
