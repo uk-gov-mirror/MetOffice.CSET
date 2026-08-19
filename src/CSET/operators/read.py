@@ -235,6 +235,7 @@ def _load_model(
     logger.debug("Constraint: %s", constraint)
     cubes = iris.load(input_files, constraint, callback=_loading_callback)
     # If required, compute wind_speed from components.
+
     cubes = _compute_winds(cubes, constraint)
 
     # Add model_name attribute to each cube to make it available at any further
@@ -888,25 +889,16 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
-def constraint_matches_name(constraint, name):
-    """Make fake cube with requested name, then check if name matches the constraint."""
-    if constraint is None:
-        return False
-    cube = iris.cube.Cube(np.zeros(1))
-    cube.long_name = name
-    cube.var_name = name
-    return constraint.extract(cube) is not None
-
-
-def get_filter_windspeed(constraint):
+def get_filter_windspeed(constraint: iris.Constraint):
     """Get the windspeed filter by using the hijacked constraint."""
     filter_windspeed = []
-    if constraint_matches_name(constraint, "WIND_SPEED_REQUESTED"):
-        filter_windspeed.append("wind_speed_at_10m")
-    if constraint_matches_name(constraint, "EASTWARD_WIND_SPEED_REQUESTED"):
-        filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
-    if constraint_matches_name(constraint, "NORTHWARD_WIND_SPEED_REQUESTED"):
-        filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
+    if hasattr(constraint, "varname"):
+        if "wind_speed_at_10m" in constraint.varname:
+            filter_windspeed.append("wind_speed_at_10m")
+        if "eastward_wind_at_10m" in constraint.varname:
+            filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
+        if "northward_wind_at_10m" in constraint.varname:
+            filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
     return filter_windspeed
 
 
