@@ -888,31 +888,24 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
-def _get_requested_windspeed_names(constraint):
-    """Extract the requested windspeed type from the constraint."""
-    if constraint is None or not hasattr(constraint, "_cube_func"):
-        return []
-    closure = constraint._cube_func.__closure__
-    if not closure:
-        return []
+def constraint_matches_name(constraint, name):
+    """Make fake cube with requested name, then check if name matches the constraint."""
+    if constraint is None:
+        return False
+    cube = iris.cube.Cube(np.zeros(1))
+    cube.long_name = name
+    cube.var_name = name
+    return constraint.extract(cube) is not None
 
-    closure_vars = dict(
-        zip(
-            constraint._cube_func.__code__.co_freevars,
-            (c.cell_contents for c in closure),
-            strict=True,
-        )
-    )
-    requested_names = [
-        n for n in closure_vars.get("varname", []) if n.endswith("REQUESTED")
-    ]
 
+def get_filter_windspeed(constraint):
+    """Get the windspeed filter by using the hijacked constraint."""
     filter_windspeed = []
-    if "WIND_SPEED_REQUESTED" in requested_names:
+    if constraint_matches_name(constraint, "WIND_SPEED_REQUESTED"):
         filter_windspeed.append("wind_speed_at_10m")
-    if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
+    if constraint_matches_name(constraint, "EASTWARD_WIND_SPEED_REQUESTED"):
         filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
-    if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
+    if constraint_matches_name(constraint, "NORTHWARD_WIND_SPEED_REQUESTED"):
         filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
     return filter_windspeed
 
@@ -934,8 +927,10 @@ def _compute_winds(
     # the cell methods, but it may not be warranted.
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
-
-    filter_windspeed = _get_requested_windspeed_names(constraint)
+    if isinstance(constraint, iris.Constraint):
+        filter_windspeed = get_filter_windspeed(constraint)
+    else:
+        filter_windspeed = None
 
     u_constr = iris.Constraint("eastward_wind_at_10m")
     v_constr = iris.Constraint("northward_wind_at_10m")
