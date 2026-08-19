@@ -888,6 +888,35 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
         cube.data = dask.array.ma.masked_greater(cube.core_data(), 144.0)
 
 
+def _get_requested_windspeed_names(constraint):
+    """Extract the requested windspeed type from the constraint."""
+    if constraint is None or not hasattr(constraint, "_cube_func"):
+        return []
+    closure = constraint._cube_func.__closure__
+    if not closure:
+        return []
+
+    closure_vars = dict(
+        zip(
+            constraint._cube_func.__code__.co_freevars,
+            (c.cell_contents for c in closure),
+            strict=True,
+        )
+    )
+    requested_names = [
+        n for n in closure_vars.get("varname", []) if n.endswith("REQUESTED")
+    ]
+
+    filter_windspeed = []
+    if "WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.append("wind_speed_at_10m")
+    if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
+    if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
+        filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
+    return filter_windspeed
+
+
 def _compute_winds(
     cubes: iris.cube.CubeList, constraint: iris.Constraint | None = None
 ):
@@ -906,33 +935,7 @@ def _compute_winds(
     #
     # A check on UM STASH attributes is also conducted to adjust directions.
 
-    if (constraint is not None) and (hasattr(constraint, "_cube_func")):
-        varname_dict = dict(
-            zip(
-                constraint._cube_func.__code__.co_freevars,
-                (c.cell_contents for c in constraint._cube_func.__closure__),
-                strict=True,
-            )
-        )
-        requested_names = [
-            n for n in varname_dict["varname"] if n.endswith("REQUESTED")
-        ]
-
-        filter_windspeed = []
-        if "WIND_SPEED_REQUESTED" in requested_names:
-            filter_windspeed.append("wind_speed_at_10m")
-        if "EASTWARD_WIND_SPEED_REQUESTED" in requested_names:
-            filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
-        if "NORTHWARD_WIND_SPEED_REQUESTED" in requested_names:
-            filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
-
-        filter_windspeed_constraint = iris.Constraint(
-            cube_func=lambda cube: (
-                cube.long_name in filter_windspeed
-                or cube.standard_name in filter_windspeed
-                or cube.var_name in filter_windspeed
-            )
-        )
+    filter_windspeed = _get_requested_windspeed_names(constraint)
 
     u_constr = iris.Constraint("eastward_wind_at_10m")
     v_constr = iris.Constraint("northward_wind_at_10m")
@@ -954,7 +957,14 @@ def _compute_winds(
     except (KeyError, AttributeError):
         pass
 
-    if not ("observed" in cubes[0].long_name) and constraint is not None:
+    if filter_windspeed and "observed" not in cubes[0].name():
+        filter_windspeed_constraint = iris.Constraint(
+            cube_func=lambda cube: (
+                cube.long_name in filter_windspeed
+                or cube.standard_name in filter_windspeed
+                or cube.var_name in filter_windspeed
+            )
+        )
         cubes = cubes.extract(filter_windspeed_constraint)
 
     return cubes
