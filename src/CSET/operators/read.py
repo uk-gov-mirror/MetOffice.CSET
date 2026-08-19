@@ -891,15 +891,10 @@ def _fix_lfric_cloud_base_altitude(cube: iris.cube.Cube):
 
 def get_filter_windspeed(constraint: iris.Constraint):
     """Get the windspeed filter by using the hijacked constraint."""
-    filter_windspeed = []
     if hasattr(constraint, "varname"):
-        if "wind_speed_at_10m" in constraint.varname:
-            filter_windspeed.append("wind_speed_at_10m")
-        if "eastward_wind_at_10m" in constraint.varname:
-            filter_windspeed.extend(["eastward_wind_at_10m", "u_wind_at_10m"])
-        if "northward_wind_at_10m" in constraint.varname:
-            filter_windspeed.extend(["northward_wind_at_10m", "v_wind_at_10m"])
-    return filter_windspeed
+        return constraint.varname
+    else:
+        return None
 
 
 def _compute_winds(
@@ -927,6 +922,7 @@ def _compute_winds(
     u_constr = iris.Constraint("eastward_wind_at_10m")
     v_constr = iris.Constraint("northward_wind_at_10m")
     speed_constr = iris.Constraint("wind_speed_at_10m")
+
     try:
         if cubes.extract(u_constr) and cubes.extract(v_constr):
             if len(cubes) == 2:
@@ -935,12 +931,13 @@ def _compute_winds(
                 wind_only = False
             if len(cubes.extract(u_constr)) == 1 and not cubes.extract(speed_constr):
                 _add_wind_speed_um(cubes)
+
             # Convert winds in the UM to be relative to true east and true north.
-            if cubes.extract(u_constr) and cubes.extract(v_constr):
-                _convert_wind_true_dirn_um(cubes)
+            _convert_wind_true_dirn_um(cubes)
             # Return only wind_speed cube
             if wind_only:
                 cubes = cubes.extract(speed_constr)
+
     except (KeyError, AttributeError):
         pass
 
